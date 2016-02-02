@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style type='text/css'>
+      body { margin:0; padding:0; background-color:#e5e5ff; }
+      html, #title, #map, #legend { position:absolute; top:0; bottom:0; width:100%; }
+    </style>
+		
+    <title>Meteorite Strikes</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' />
+    <!-- leaflet -->
+    <link rel='stylesheet' href='src/leaflet/leaflet.css' />
+    <script src='src/leaflet/leaflet-src.js'></script>
+    <!-- jquery -->
+    <script src='src/jquery/jquery.min.js'></script>
+    <!-- d3 -->
+    <script src='src/d3/d3.min.js'></script>
+  </head>
+  <body>
+    <div id='title' style='width:100%; height:50px'></div>
+    <div id='map' style='left:50px; top:50px; width:1100px; height:600px;'></div>
+    <div id='legend' style='left:1175px; top:50px; width:150px; height:600px;'></div>
+    <!-- -->
+    <script>
+      var width = window.innerWidth,
+          height = window.innerHeight;
+        
+      d3.select("#title").append("svg")
+        .attr("width", width)
+        .attr("height", 50)
+        .append("g")
+        .attr("transform", "translate(" + (0.5*width) + "," + 30 + ")")
+        .append("text").text("Meteorite Strikes by Location, Class & Mass")
+        .style("text-anchor", "middle")
+        .style("font", "16px sans-serif");
+    
+    var svg = d3.select("#legend").append("svg")
+        .attr("width", 150)
+        .attr("height", 600)
+        .append("g")
+        .attr("transform", "translate(" + 0 + "," + 10 + ")");
+        
+    svg.append("text").text("Meteorite Classes")
+      .style("text-anchor", "left")
+      .style("font", "12px sans-serif");
+    
+      // Ingrid
+      var stamenUrl = 'http://tile.stamen.com/toner/{z}/{x}/{y}.png',
+				
+          osmAttrib = 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://creativecommons.org/licenses/by-sa/3.0">CC BY SA</a>.',
+				
+          baselayer = L.tileLayer(stamenUrl, {attribution: osmAttrib})
+			
+      var map = new L.Map('map', {layers: [baselayer], center: new L.LatLng(39.10,6.20), zoom:3 });
+		
+      // adding geoJSON points
+			
+      // add tooltip style first
+      function popUp(f,l) {
+        var year = f.properties.year.year,
+            mass = f.properties.mass,
+            meteorite = f.properties.meteorite,
+            type = f.properties.type;
+        var popUpcontent = '<span style="">Year of meteorite strike: '+year+'</span></br><span style="">Mass of meteorite strike: '+mass+' g</span></br><span style="">Type of meteorite strike: '+meteorite+'</span></br><span style="">Class of meteorite strike: '+type+'</span>'
+        if (type != 'Unknown') {
+          var img = './img/' + type.replace(': ', '-') + '-Meteorite.jpg';
+          popUpcontent += '</br><img src="'+img+'" width="250" style="padding:1px; margin:1px;">'
+        }
+        l.bindPopup(popUpcontent);
+      };
+			
+      // here is some data
+      $.getJSON('data/meteoritessize.geojson', function(data) {
+        data.features = data.features.map(function(f) {
+          var type = f.properties.meteorite,
+              year = f.properties.year.year,
+              mass = f.properties.mass;
+
+          type = type.replace('Relict iron', 'Iron');
+        
+          if ((type.indexOf('A') == 0) || (type.indexOf('B') == 0) || (type.indexOf('Diogenite') == 0) || (type.indexOf('Eucrite') == 0) || (type.indexOf('Enst achon-ung') == 0) || (type.indexOf('Howardite') == 0) || (type.indexOf("Lodranite") == 0) || (type.indexOf("Lunar") == 0) || (type.indexOf("Martian") == 0) || (type.indexOf("Ureilite") == 0) || (type.indexOf("Winonaite") == 0)) { type = "Stony: Achondrites"; }
+          else if ((type.indexOf("C") == 0) || (type.indexOf("E") == 0) || (type.indexOf("H") == 0) || (type.indexOf("K") == 0) || (type.indexOf("L") == 0) || (type.indexOf("O") == 0) || (type.indexOf("R") == 0)) { type = "Stony: Chondrites"; }
+          else if ((type.indexOf("Iron, IAB") == 0) || (type.indexOf("Iron, IIE") == 0)) { type = "Iron: Primitive"; }
+          else if ((type.indexOf("Iron, IC") == 0) || (type.indexOf("Iron, I") == 0)) { type = "Iron: Magmatic"; }
+          else if ((type.indexOf("Mesosiderite") == 0)) { type = "Stony-Iron: Mesosiderite"; }
+          else if ((type.indexOf("Pallasite") == 0)) { type = "Stony-Iron: Pallasite"; }
+          else if ((type.indexOf("Discredited") == 0) || (type.indexOf("Doubtful") == 0) || (type.indexOf("Fusion crust") == 0) || (type.indexOf("Impact Crater") == 0) || (type.indexOf("Iron") == 0) || (type.indexOf("Pseudometeorite") == 0) || (type.indexOf("Stone") == 0) || (type.indexOf("Terrestrial rock") == 0)) { type = "Unknown"; }
+          
+          f.properties.type = type;
+          f.properties.year.year = parseInt(year.replace('s','').replace('before ',''));
+          f.properties.mass = parseFloat(mass.replace(/,/g,''));
+          
+          return f;
+        });
+      
+        var colorScale = d3.scale.category10().domain( d3.set(data.features.map(function(f) { return f.properties.type; })).values().sort().reverse() ),
+            radiusScale = d3.scale.linear().domain(d3.extent(data.features, function(f) { return Math.cbrt(f.properties.mass); })).range([5,50]);
+      
+        colorScale.domain().forEach(function(d,i) {
+          c = colorScale(d);
+          svg.append('g').attr("transform", "translate(" + 0 + "," + (30 + i*50) + ")")
+            .append('rect').attr('width', 10).attr('height', 10).style('fill', c);
+          svg.append('g').attr("transform", "translate(" + 20 + "," + (37 + i*50) + ")")
+            .append('text').text(d)
+            .style("text-anchor", "left")
+            .style("font", "10px sans-serif");
+        });
+      
+        var meteorite = L.geoJson(data, { 
+          onEachFeature: popUp, 
+          pointToLayer: function (feature, latlng) {
+            var mass = feature.properties.mass,
+                type = feature.properties.type;
+      
+            return L.circleMarker(latlng, {
+              radius: radiusScale(Math.cbrt(mass)),
+              fillColor: colorScale(type),
+              color: '#fff',
+              weight: 0.5,
+              opacity: 1,
+              fillOpacity: 0.75
+            });
+	  }
+        })
+			
+        meteorite.addTo(map);
+      });
+			
+    </script>
+  </body>
+</html>
